@@ -34,7 +34,7 @@ for ite in range(iteration):
     rute[:, 0] = 0  # All ants start at city 0
     
     for i in range(m):
-        visited = set([0])
+        visited = {0}
         for j in range(1, n):
             cur_loc = rute[i, j-1]
             unvisited = [c for c in range(n) if c not in visited]
