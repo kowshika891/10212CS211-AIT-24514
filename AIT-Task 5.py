@@ -21,72 +21,78 @@ beta = 2
 visibility = 1 / d
 visibility[visibility == inf] = 0
 
-# Initial pheromone matrix
-pheromone = 0.1 * np.ones((m, n))
+# Initialize pheromone matrix
+pheromone = 0.1 * np.ones((n, n))
 
-# Initialize routes matrix (each ant's route)
-rute = np.ones((m, n + 1))
+# Initialize variables to store the best path and cost across all iterations
+best_path = None
+best_cost = float('inf')
 
 for ite in range(iteration):
-    rute[:, 0] = 1  # all ants start at city 1
-
+    # Initialize routes matrix for this iteration
+    rute = np.ones((m, n), dtype=int)
+    rute[:, 0] = 0  # All ants start at city 0
+    
     for i in range(m):
-        temp_visibility = np.array(visibility)
+        visited = set([0])
+        for j in range(1, n):
+            cur_loc = rute[i, j-1]
+            unvisited = [c for c in range(n) if c not in visited]
+            if not unvisited:
+                break
+                
+            probabilities = np.zeros(n)
+            total = 0.0
+            for city in unvisited:
+                p_val = (pheromone[cur_loc, city] ** beta) * (visibility[cur_loc, city] ** alpha)
+                probabilities[city] = p_val
+                total += p_val
+            
+            if total > 0:
+                probabilities /= total
+            else:
+                probabilities[unvisited] = 1.0 / len(unvisited)
+            
+            next_city = np.random.choice(range(n), p=probabilities)
+            rute[i, j] = next_city
+            visited.add(next_city)
 
-        for j in range(n - 1):
-            combine_feature = np.zeros(n)
-            cum_prob = np.zeros(n)
-
-            cur_loc = int(rute[i, j] - 1)
-
-            # Prevent returning to the current city
-            temp_visibility[:, cur_loc] = 0
-
-            # Calculate pheromone and visibility features
-            p_feature = np.power(pheromone[cur_loc, :], beta)
-            v_feature = np.power(temp_visibility[cur_loc, :], alpha)
-
-            combine_feature = p_feature * v_feature
-
-            total = np.sum(combine_feature)
-            probs = combine_feature / total if total > 0 else np.zeros_like(combine_feature)
-
-            cum_prob = np.cumsum(probs)
-
-            r = np.random.random_sample()
-
-            city = np.nonzero(cum_prob > r)[0][0] + 1
-
-            rute[i, j + 1] = city
-
-        # Fill last city (remaining unvisited city)
-        left = list(set(range(1, n + 1)) - set(rute[i, :-2].astype(int)))[0]
-        rute[i, -2] = left
-
-    rute_opt = np.array(rute)
-
-    dist_cost = np.zeros((m, 1))
+    # Calculate distance costs
+    dist_cost = np.zeros(m)
     for i in range(m):
-        s = 0
-        for j in range(n - 1):
-            s += d[int(rute_opt[i, j]) - 1, int(rute_opt[i, j + 1]) - 1]
-        dist_cost[i] = s
+        total_dist = 0
+        for j in range(n-1):
+            total_dist += d[rute[i, j], rute[i, j+1]]
+        total_dist += d[rute[i, n-1], rute[i, 0]]
+        dist_cost[i] = total_dist
 
-    dist_min_loc = np.argmin(dist_cost)
-    dist_min_cost = dist_cost[dist_min_loc]
-    best_route = rute[dist_min_loc, :]
+    # Find best route in this iteration
+    current_min_loc = np.argmin(dist_cost)
+    current_min_cost = dist_cost[current_min_loc]
+    current_best_route = rute[current_min_loc, :].copy()
+
+    # Update overall best path and cost
+    if current_min_cost < best_cost:
+        best_cost = current_min_cost
+        best_path = current_best_route
 
     # Evaporate pheromone
-    pheromone = (1 - e) * pheromone
+    pheromone *= (1 - e)
 
     # Update pheromone based on ants' routes
     for i in range(m):
-        for j in range(n - 1):
-            dt = 1 / dist_cost[i]
-            pheromone[int(rute_opt[i, j]) - 1, int(rute_opt[i, j + 1]) - 1] += dt
+        # Add pheromone for each edge in the route
+        for j in range(n-1):
+            city_from = rute[i, j]
+            city_to = rute[i, j+1]
+            pheromone[city_from, city_to] += 1.0 / dist_cost[i]
+        # Add pheromone for return to start
+        city_from = rute[i, n-1]
+        city_to = rute[i, 0]
+        pheromone[city_from, city_to] += 1.0 / dist_cost[i]
 
-print('Route of all the ants at the end:')
-print(rute_opt)
-print()
-print('Best path:', best_route)
-print('Cost of the best path:', int(dist_min_cost[0]) + d[int(best_route[-2]) - 1, 0])
+# Convert best_path to 1-indexed for output
+best_path_1_indexed = best_path + 1
+
+print('Best path (1-indexed):', best_path_1_indexed)
+print('Cost of the best path:', int(best_cost))
